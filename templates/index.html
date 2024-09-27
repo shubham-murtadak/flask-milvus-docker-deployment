@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Milvus Database List</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Available Milvus Databases</h1>
+        <button id="fetchDatabasesBtn">Fetch Databases</button>
+        <ul id="databaseList"></ul>
+    </div>
+
+    <script>
+        document.getElementById('fetchDatabasesBtn').addEventListener('click', function() {
+            fetch('/databases')
+                .then(response => response.json())
+                .then(data => {
+                    const databaseList = document.getElementById('databaseList');
+                    databaseList.innerHTML = ''; // Clear previous entries
+                    data.milvus_available_databases.forEach(db => {
+                        const listItem = document.createElement('li');
+                        listItem.textContent = db;
+                        databaseList.appendChild(listItem);
+                    });
+                })
+                .catch(error => console.error('Error fetching databases:', error));
+        });
+    </script>
+</body>
+</html>
