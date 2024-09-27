@@ -1,26 +1,56 @@
 version: '3.5'
 
 services:
-  flask_app:
+  flask:
+    container_name: milvus-flask
+    image: milvus-flask
     build: .  # Build the Flask app from the Dockerfile in the current directory
     ports:
       - "5000:5000"
     depends_on:
-      - milvus  # Ensure Milvus starts before Flask app
+      - standalone  # Ensure Milvus starts before Flask app
+    
+  etcd:
+    container_name: milvus-etcd
+    image: quay.io/coreos/etcd:v3.5.0
     environment:
-      MILVUS_HOST: milvus  # Set environment variable for Flask app
-      MILVUS_PORT: 19530   # Milvus default port
-    networks:
-      - default  # Use the default network
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/etcd:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
 
-  milvus:
-    image: milvusdb/milvus:latest  # Pull the latest Milvus image
-    restart: unless-stopped  # Restart the service if it crashes
+  minio:
+    container_name: milvus-minio
+    image: minio/minio:RELEASE.2020-12-03T00-03-10Z
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/minio:/minio_data
+    command: minio server /minio_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  standalone:
+    container_name: milvus-standalone
+    image: milvusdb/milvus:v2.4.5
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/milvus:/var/lib/milvus
     ports:
-      - "19530:19530"  # Milvus port for communication
-    networks:
-      - default  # Use the default network
+      - "19530:19530"
+    depends_on:
+      - "etcd"
+      - "minio"
 
 networks:
   default:
-    driver: bridge  # Use the default bridge network
+    name: milvus
