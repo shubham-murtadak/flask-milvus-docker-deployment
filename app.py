@@ -1,35 +1,45 @@
 from flask import Flask, jsonify
-import pymongo
-from pymongo import MongoClient
+import os
+from pymilvus import MilvusClient
+from pymilvus import connections  # Import for connection-related functions
 
 app = Flask(__name__)
 
-def get_db():
-    client = MongoClient(host='test_mongodb',
-                         port=27017, 
-                         username='root', 
-                         password='pass',
-                        authSource="admin")
-    db = client["animal_db"]
-    return db
+# Retrieve Milvus connection details from environment variables (recommended)
+milvus_host = os.getenv("MILVUS_HOST")
+milvus_port = int(os.getenv("MILVUS_PORT", 19530))  # Default port if not set
 
-@app.route('/')
-def ping_server():
-    return "Welcome to the world of animals."
+@app.route("/")
+def say_hello():
+    """
+    Connects to Milvus using either environment variables or local IP (fallback).
 
-@app.route('/animals')
-def get_stored_animals():
-    db=""
+    Returns JSON response with a greeting and list of Milvus collections (if connection successful).
+    """
+
     try:
-        db = get_db()
-        _animals = db.animal_tb.find()
-        animals = [{"id": animal["id"], "name": animal["name"], "type": animal["type"]} for animal in _animals]
-        return jsonify({"animals": animals})
-    except:
-        pass
-    finally:
-        if type(db)==MongoClient:
-            db.close()
+        # Connect to Milvus using preferred method (environment variables)
+        if milvus_host and milvus_port:
+            client = MilvusClient(uri=f"http://{milvus_host}:{milvus_port}")
+        else:
+            # Fallback to local IP (consider service discovery for better practice)
+            client = MilvusClient(uri="http://localhost:19530")
 
-if __name__=='__main__':
-    app.run(host="0.0.0.0", port=5000)
+        print(f"Successfully connected to Milvus at {client.uri}")
+
+        # List all collection names in Milvus
+        collections = client.list_collections()
+
+        return jsonify({
+            "msg": f"Hello from Flask! API Key (replace with actual key)",
+            "milvus_collections": collections
+        })
+
+    except connections.MilvusException as e:
+        print(f"Error connecting to Milvus: {e}")
+        return jsonify({
+            "error": "Failed to connect to Milvus"
+        }), 500  # Internal Server Error
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)

@@ -1,2 +1,2 @@
-flask
-pymongo
+Flask
+pymilvus==2.2.0
